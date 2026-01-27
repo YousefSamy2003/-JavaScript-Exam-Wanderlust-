@@ -1,10 +1,22 @@
+////// main
+displayAllCountry();
+
 const allLink = document.querySelectorAll(".nav-section .nav-item");
 const allSection = document.querySelectorAll("section");
 const globalCountry = document.getElementById("global-country");
 const globalCity = document.getElementById("global-city");
+const globalYear = document.getElementById("global-year");
+
 const selectedDestination = document.getElementById("selected-destination");
 const dashboardCountry = document.getElementById("dashboard-country-info");
 const globalSearchBtn = document.getElementById("global-search-btn");
+const holidaysContainer = document.getElementById("holidays-content");
+const statHolidays = document.getElementById("stat-holidays");
+
+let globalListHolidayes = [];
+let myPlans = {
+  holiday: [],
+};
 
 allLink.forEach((link) => {
   link.addEventListener("click", () => {
@@ -23,8 +35,7 @@ allLink.forEach((link) => {
   });
 });
 
-
-/////// main logic 
+/////// main logic
 globalCountry.addEventListener("change", async (e) => {
   let selectedValue = e.target.value.toLowerCase();
   console.log(selectedValue);
@@ -42,11 +53,18 @@ globalCountry.addEventListener("change", async (e) => {
       globalCountry.value = "";
       globalCity.value = "";
     });
+  let year = globalYear.value;
+  let countryCode = selectedValue;
+  getHolidays(year, countryCode);
+  document.getElementById("pragraph-country").innerHTML =
+    ` Browse public holidays for ${globalCountry.value} and plan your trips around
+                  them`;
+
+
+
 });
 
-
-
-///////// handle btn 
+///////// handle btn
 globalSearchBtn.addEventListener("click", async () => {
   let selectedValue = globalCountry.value.toLowerCase();
   let city = await getCountryDetails(selectedValue);
@@ -54,18 +72,32 @@ globalSearchBtn.addEventListener("click", async () => {
 });
 
 ///// get data
+
 async function getAllCountry() {
   let data;
   let response = await fetch(`https://date.nager.at/api/v3/AvailableCountries`);
   data = await response.json();
   return data;
 }
+
+////// getCountryDetails by country code
 async function getCountryDetails(countryCode) {
   let response = await fetch(
     `https://restcountries.com/v3.1/alpha/${countryCode}`,
   );
   let data = await response.json();
   return data[0];
+}
+///////// getHolidays
+async function getHolidays(year, countryCode) {
+  let data = await fetch(
+    `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`,
+  );
+  data = await data.json();
+  dispalyHolidayes(data);
+  globalListHolidayes = data;
+  statHolidays.innerHTML = globalListHolidayes.length;
+  console.log(globalListHolidayes);
 }
 
 ////// display   ////////////////
@@ -82,8 +114,6 @@ async function displayAllCountry() {
   }
   globalCountry.innerHTML += box;
 }
-
-displayAllCountry();
 
 function displayDestination(country) {
   selectedDestination.innerHTML = `
@@ -113,7 +143,6 @@ function displayDestination(country) {
 }
 
 function displayCountryInfo(country) {
-  // بيانات الدولة الأساسية
   const flag = country.flags?.png || "";
   const commonName = country.name?.common || "";
   const officialName = country.name?.official || "";
@@ -129,19 +158,16 @@ function displayCountryInfo(country) {
   const drivingSide = country.car?.side || "-";
   const weekStart = country.startOfWeek || "-";
 
-  // العملات
   const currencies = country.currencies
     ? Object.values(country.currencies)
         .map((c) => `${c.name} (${c.symbol})`)
         .join(", ")
     : "-";
 
-  // اللغات
   const languages = country.languages
     ? Object.values(country.languages).join(", ")
     : "-";
 
-  // الدول المجاورة
   const neighbors = country.borders
     ? country.borders
         .map(
@@ -151,13 +177,10 @@ function displayCountryInfo(country) {
         .join(" ")
     : "<span class='extra-tag'>No neighbors</span>";
 
-  // الوقت المحلي
   const localTime = getLocalTimeFromOffset(timezone);
 
-  // رابط Google Maps
   const mapsLink = country.maps?.googleMaps || "#";
 
-  // بناء الـ HTML
   dashboardCountry.innerHTML = `
   <div class="dashboard-country-header">
     <img src="${flag}" alt="${commonName}" class="dashboard-country-flag" />
@@ -237,7 +260,6 @@ function displayCountryInfo(country) {
   `;
 }
 
-// دالة لحساب الوقت المحلي من offset بصيغة UTC±hh:mm
 function getLocalTimeFromOffset(offset) {
   const now = new Date();
   const match = offset.match(/UTC([+-]\d{2}):?(\d{2})?/);
@@ -255,10 +277,84 @@ function getLocalTimeFromOffset(offset) {
 
   return local.toLocaleTimeString("en-US", { hour12: false });
 }
+function dispalyHolidayes(data) {
+  let box = "";
 
+  data.map((holiday, index) => {
+    let x = holiday.date;
+    let date = new Date(x);
+
+    let day = date.getDate();
+    let month = date.toLocaleString("en-US", { month: "short" }).toUpperCase();
+
+    let dayName = date.toLocaleString("en-US", { weekday: "short" });
+
+    box += `
+      <div class="holiday-card"  id=${index}  >
+        <div class="holiday-card-header">
+          <div class="holiday-date-box">
+            <span class="day">${day}</span>
+            <span class="month">${month}</span>
+          </div>
+          <button class="holiday-action-btn" id=holidey${index} onclick="addHolidayToPlan(${index})" >
+            <i class="fa-regular fa-heart"></i>
+          </button>
+        </div>
+
+        <h3>${holiday.name}</h3>
+        <p class="holiday-name">${holiday.name}</p>
+
+        <div class="holiday-card-footer">
+          <span class="holiday-day-badge">
+            <i class="fa-regular fa-calendar"></i> ${dayName}
+          </span>
+          <span class="holiday-type-badge">${holiday.types[0]}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  holidaysContainer.innerHTML = box;
+}
 
 window.neighborsCountryDetails = async function (countryCode) {
   let selectedValue = countryCode.toLowerCase();
   let city = await getCountryDetails(selectedValue);
   displayCountryInfo(city);
 };
+
+// window.addHolidayToPlan = function (index) {
+//   myPlans.holiday.push(globalListHolidayes[index]);
+//   localStorage.setItem("myPlans", JSON.stringify(myPlans));
+//   document.getElementById(`holidey${index}`).classList.add("saved");
+//   console.log(myPlans);
+// };
+
+window.addHolidayToPlan = function (index) {
+  myPlans.holiday ??= [];
+
+  let item = globalListHolidayes[index];
+
+  if (myPlans.holiday.some((h) => h.date === item.date)) return;
+
+  myPlans.holiday.push(item);
+  localStorage.setItem("myPlans", JSON.stringify(myPlans));
+
+  document.getElementById(`holiday${index}`)?.classList.add("saved");
+
+  console.log(myPlans);
+};
+
+
+
+
+async function getEvents(year, countryCode) {
+  let data = await fetch(
+    `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`,
+  );
+  data = await data.json();
+  dispalyHolidayes(data);
+  globalListHolidayes = data;
+  statHolidays.innerHTML = globalListHolidayes.length;
+  console.log(globalListHolidayes);
+}
