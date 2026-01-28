@@ -12,10 +12,14 @@ const dashboardCountry = document.getElementById("dashboard-country-info");
 const globalSearchBtn = document.getElementById("global-search-btn");
 const holidaysContainer = document.getElementById("holidays-content");
 const statHolidays = document.getElementById("stat-holidays");
+const Loading = document.getElementById("loading-overlay");
 
 let globalListHolidayes = [];
+let globalListEvents = [];
+
 let myPlans = {
   holiday: [],
+  events: [],
 };
 
 allLink.forEach((link) => {
@@ -55,13 +59,12 @@ globalCountry.addEventListener("change", async (e) => {
     });
   let year = globalYear.value;
   let countryCode = selectedValue;
+
   getHolidays(year, countryCode);
   document.getElementById("pragraph-country").innerHTML =
     ` Browse public holidays for ${globalCountry.value} and plan your trips around
                   them`;
-
-
-
+  getEvents(e.target.value);
 });
 
 ///////// handle btn
@@ -90,11 +93,14 @@ async function getCountryDetails(countryCode) {
 }
 ///////// getHolidays
 async function getHolidays(year, countryCode) {
+  Loading.classList.remove("hidden");
   let data = await fetch(
     `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`,
   );
   data = await data.json();
+
   dispalyHolidayes(data);
+  Loading.classList.add("hidden");
   globalListHolidayes = data;
   statHolidays.innerHTML = globalListHolidayes.length;
   console.log(globalListHolidayes);
@@ -323,12 +329,7 @@ window.neighborsCountryDetails = async function (countryCode) {
   displayCountryInfo(city);
 };
 
-// window.addHolidayToPlan = function (index) {
-//   myPlans.holiday.push(globalListHolidayes[index]);
-//   localStorage.setItem("myPlans", JSON.stringify(myPlans));
-//   document.getElementById(`holidey${index}`).classList.add("saved");
-//   console.log(myPlans);
-// };
+
 
 window.addHolidayToPlan = function (index) {
   myPlans.holiday ??= [];
@@ -345,16 +346,109 @@ window.addHolidayToPlan = function (index) {
   console.log(myPlans);
 };
 
-
-
-
-async function getEvents(year, countryCode) {
+async function getEvents(countryCode) {
   let data = await fetch(
-    `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`,
+    `https://app.ticketmaster.com/discovery/v2/events.json?apikey=VwECw2OiAzxVzIqnwmKJUG41FbeXJk1y&countryCode=${countryCode}&size=20`,
   );
   data = await data.json();
-  dispalyHolidayes(data);
-  globalListHolidayes = data;
-  statHolidays.innerHTML = globalListHolidayes.length;
-  console.log(globalListHolidayes);
+  if (data.page.totalElements === 0) {
+    data = 0;
+    console.log(data);
+  } else {
+    data = data._embedded.events;
+    console.log(data);
+    globalListEvents = data;
+    displayEvents(data);
+  }
 }
+
+function displayEvents(data) {
+  let box = "";
+
+  if (!data || data.length == 0) {
+    // Empty State (زي ما هو)
+    box += `<div class="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-ticket"></i></div>
+        <h3>No Events Found</h3>
+        <p>No events found for this location</p>
+      </div>`;
+  } else {
+    // Loop through data
+    box = data
+      .map((event, index) => {
+        const eventImage =
+          event.images && event.images.length > 0
+            ? event.images[0].url
+            : "https://via.placeholder.com/400x200?text=No+Image";
+
+        const category = event.classifications?.[0]?.segment?.name || "Event";
+
+        const venueName = event._embedded?.venues?.[0]?.name || "Unknown Venue";
+        const cityName = event._embedded?.venues?.[0]?.city?.name || "";
+
+        const eventDate = event.dates?.start?.localDate || "TBA";
+        const eventTime = event.dates?.start?.localTime
+          ? event.dates.start.localTime.slice(0, 5)
+          : "";
+
+        return `
+       <div class="event-card"> <div class="event-card-image">
+            <img src="${eventImage}" alt="${event.name}" />
+            <span class="event-card-category">${category}</span>
+            <button class="event-card-save" id=event${index} onclick="addEventToPlan('${index}')">
+              <i class="fa-regular fa-heart"></i>
+            </button>
+          </div>
+          
+          <div class="event-card-body">
+            <h3>${event.name}</h3> <div class="event-card-info">
+              <div>
+                <i class="fa-regular fa-calendar"></i> ${eventDate} ${eventTime ? "at " + eventTime : ""}
+              </div>
+              <div>
+                <i class="fa-solid fa-location-dot"></i> ${venueName}, ${cityName}
+              </div>
+            </div>
+
+            <div class="event-card-footer">
+              <button class="btn-event" onclick="addEventToPlan('${index}')">
+                 <i class="fa-regular fa-heart"></i> Save
+              </button>
+              
+              <a href="${event.url}" target="_blank" class="btn-buy-ticket">
+                <i class="fa-solid fa-ticket"></i> Buy Tickets
+              </a>
+            </div>
+          </div>
+       </div>
+      `;
+      })
+      .join("");
+  }
+
+  document.getElementById("events-content").innerHTML = box;
+}
+
+window.addEventToPlan = function (index) {
+  myPlans.events ??= [];
+  let rawItem = globalListEvents[index];
+  let itemToSave = {
+    id: rawItem.id,
+    name: rawItem.name,
+    date: rawItem.dates?.start?.localDate || "No Date",
+    image: rawItem.images?.[0]?.url || "",
+    type: "event",
+  };
+  if (myPlans.events.some((savedItem) => savedItem.id === itemToSave.id)) {
+    console.log("Event already saved!");
+    return;
+  }
+  myPlans.events.push(itemToSave);
+  localStorage.setItem("myPlans", JSON.stringify(myPlans));
+  let btn = document.getElementById(`event${index}`);
+  if (btn) {
+    btn.classList.add("saved");
+    btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+  }
+  console.log("Current Plan:", myPlans.events);
+};
