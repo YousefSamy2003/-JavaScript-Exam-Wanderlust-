@@ -65,6 +65,7 @@ globalCountry.addEventListener("change", async (e) => {
     ` Browse public holidays for ${globalCountry.value} and plan your trips around
                   them`;
   getEvents(e.target.value);
+  document.getElementById("pragraph-event").innerHTML=`Discover concerts, sports, theatre and more in ${globalCountry.value}`
 });
 
 ///////// handle btn
