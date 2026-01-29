@@ -13,13 +13,16 @@ const globalSearchBtn = document.getElementById("global-search-btn");
 const holidaysContainer = document.getElementById("holidays-content");
 const statHolidays = document.getElementById("stat-holidays");
 const Loading = document.getElementById("loading-overlay");
+const weekendsContent = document.getElementById("lw-content");
 
 let globalListHolidayes = [];
 let globalListEvents = [];
+let globalWeekends = [];
 
 let myPlans = {
   holiday: [],
   events: [],
+  Weekends: [],
 };
 
 allLink.forEach((link) => {
@@ -65,7 +68,15 @@ globalCountry.addEventListener("change", async (e) => {
     ` Browse public holidays for ${globalCountry.value} and plan your trips around
                   them`;
   getEvents(e.target.value);
-  document.getElementById("pragraph-event").innerHTML=`Discover concerts, sports, theatre and more in ${globalCountry.value}`
+  document.getElementById("pragraph-event").innerHTML =
+    `Discover concerts, sports, theatre and more in ${globalCountry.value}`;
+
+  //////  getWeekends
+  globalYear.addEventListener("change", async (e) => {
+    let year = e.target.value;
+    let countryCode = selectedValue;
+    getWeekends(countryCode, year);
+  });
 });
 
 ///////// handle btn
@@ -330,8 +341,6 @@ window.neighborsCountryDetails = async function (countryCode) {
   displayCountryInfo(city);
 };
 
-
-
 window.addHolidayToPlan = function (index) {
   myPlans.holiday ??= [];
 
@@ -349,7 +358,7 @@ window.addHolidayToPlan = function (index) {
 
 async function getEvents(countryCode) {
   let data = await fetch(
-    `https://app.ticketmaster.com/discovery/v2/events.json?apikey=VwECw2OiAzxVzIqnwmKJUG41FbeXJk1y&countryCode=${countryCode}&size=20`,
+    `https://app.ticketmaster.com/discovery/v2/events.json?apikey=Ar0BKObNjnNpAG0NwbDdPb8LYI0HaHp3&countryCode=${countryCode}&size=20`,
   );
   data = await data.json();
   if (data.page.totalElements === 0) {
@@ -362,6 +371,8 @@ async function getEvents(countryCode) {
     displayEvents(data);
   }
 }
+
+
 
 function displayEvents(data) {
   let box = "";
@@ -452,4 +463,130 @@ window.addEventToPlan = function (index) {
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
   }
   console.log("Current Plan:", myPlans.events);
+};
+
+async function getWeekends(countryCode, year) {
+  let data = await fetch(
+    `https://date.nager.at/api/v3/LongWeekend/${year}/${countryCode}`,
+  );
+  let response = await data.json();
+  console.log(response);
+  displayWeekends(response);
+}
+
+function displayWeekends(data) {
+  globalWeekends = data;
+  let box = ``;
+
+  data.forEach((item, index) => {
+    const startDateObj = new Date(item.startDate);
+    const endDateObj = new Date(item.endDate);
+
+    const dateRange = `${startDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${endDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${endDateObj.getFullYear()}`;
+
+    let infoBox = "";
+    if (item.needBridgeDay) {
+      infoBox = `
+        <div class="lw-info-box warning">
+          <i class="fa-solid fa-info-circle"></i> Requires taking a bridge day off
+        </div>`;
+    } else {
+      infoBox = `
+        <div class="lw-info-box success" style="background: #f0fff4; color: #2f855a; border-color: #9ae6b4;">
+           <i class="fa-solid fa-check"></i> Perfect continuous break!
+        </div>`;
+    }
+
+    let visualDaysHTML = "";
+    let loopDate = new Date(startDateObj);
+
+    while (loopDate <= endDateObj) {
+      const dayName = loopDate.toLocaleDateString("en-US", {
+        weekday: "short",
+      }); // Wed
+      const dayNum = loopDate.getDate(); // 7
+
+      const isWeekend = loopDate.getDay() === 5 || loopDate.getDay() === 6;
+
+      visualDaysHTML += `
+        <div class="lw-day ${isWeekend ? "weekend" : ""}">
+          <span class="name">${dayName}</span><span class="num">${dayNum}</span>
+        </div>
+      `;
+
+      loopDate.setDate(loopDate.getDate() + 1);
+    }
+
+    box += `
+      <div class="lw-card">
+        <div class="lw-card-header">
+          <span class="lw-badge">
+            <i class="fa-solid fa-calendar-days"></i> ${item.dayCount} Days
+          </span>
+          <button class="holiday-action-btn" id="weekend-btn-${index}" onclick="addWeekendToPlan(${index})">
+            <i class="fa-regular fa-heart"></i>
+          </button>
+        </div>
+        
+        <h3>Long Weekend #${index + 1}</h3>
+        
+        <div class="lw-dates">
+          <i class="fa-regular fa-calendar"></i> ${dateRange}
+        </div>
+        
+        ${infoBox} <div class="lw-days-visual">
+          ${visualDaysHTML} </div>
+      </div>
+    `;
+  });
+
+  weekendsContent.innerHTML = box;
+}
+
+// window.addWeekendToPlan = function (index) {
+//   myPlans.Weekends.push(globalWeekends[index]);
+//   localStorage.setItem("myPlans", JSON.stringify(myPlans));
+
+//   console.log(myPlans.Weekends);
+
+// };
+
+window.addWeekendToPlan = function (index) {
+  myPlans.Weekends ??= [];
+
+  let rawItem = globalWeekends[index];
+
+  if (!rawItem) {
+    console.error("Error: No data found at index", index);
+    return;
+  }
+
+  const uniqueId = `lw-${rawItem.startDate}`;
+
+  let itemToSave = {
+    id: uniqueId,
+    title: `Long Weekend (${rawItem.dayCount} Days)`,
+    startDate: rawItem.startDate,
+    endDate: rawItem.endDate,
+    dayCount: rawItem.dayCount,
+    type: "weekend",
+  };
+
+  const isDuplicate = myPlans.Weekends.some(
+    (item) => item.id === itemToSave.id,
+  );
+
+  if (isDuplicate) {
+    console.log("This weekend is already in your plans!");
+    return;
+  }
+
+  myPlans.Weekends.push(itemToSave);
+  localStorage.setItem("myPlans", JSON.stringify(myPlans));
+
+  let btn = document.getElementById(`weekend-btn-${index}`);
+  if (btn) {
+    btn.classList.add("saved");
+    btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+  }
 };
